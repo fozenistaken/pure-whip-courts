@@ -426,9 +426,9 @@ textarea.ct-in{min-height:4.5rem;resize:none}
       wire(app, el);
       draw(app);
     },
-    update(app, el, view) {
+    update(app, el, view, changed) {
       const ctx = live.get(app);
-      if (ctx && (ctx.el !== el || (view && ctx.view && view.size !== ctx.view.size))) { ctx.el = el; ctx.view = view; draw(app); }
+      if (ctx && (ctx.el !== el || changed)) { ctx.el = el; ctx.view = view; draw(app); }
     },
     unmount(app) {
       const ctx = live.get(app);
