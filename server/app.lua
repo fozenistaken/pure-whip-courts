@@ -112,6 +112,78 @@ H.rule = staff('rule', function(_, a, me)
     return Cases.rule(num(a.id), a.verdict, type(a.codes) == 'table' and a.codes or {}, a.applyBail == true, me)
 end)
 
+local function police() return GetResourceState(Config.Police) == 'started' and exports[Config.Police] or nil end
+
+function H.papers(src)
+    local p = police()
+    if not p then return { tickets = {}, impounds = {}, mail = {} } end
+    local me = Whip.core:GetCharId(src)
+    local tickets = {}
+    for _, t in ipairs(p:GetFines(me) or {}) do
+        if t.kind ~= 'fine' or t.status == 'unpaid' then
+            tickets[#tickets + 1] = { id = t.id, number = t.number, label = t.label, kind = t.kind, amount = t.amount, original = t.original,
+                status = t.status, reason = t.reason, plate = t.plate, place = t.place, dueAt = t.dueAt, signed = t.signedAt ~= nil,
+                contest = t.contest, contestDue = t.contestDue, ruling = t.ruling, createdAt = t.createdAt, warrant = t.warrantId ~= nil }
+        end
+    end
+    local impounds = {}
+    for _, r in ipairs(p:GetMyImpounds(me) or {}) do
+        impounds[#impounds + 1] = { id = r.id, plate = r.plate, model = r.model, lot = r.lotLabel, reason = r.reason, at = r.at,
+            bill = r.bill, paid = r.paid, paidAmount = r.paidAmount, held = r.held, heldUntil = r.heldUntil }
+    end
+    return { tickets = tickets, impounds = impounds, mail = p:GetMail(me) or {} }
+end
+
+function H.payTicket(src, a)
+    local p = police()
+    if not p then return false, 'The police records are offline' end
+    local paid, why = p:PayTicket(src, num(a.id))
+    if not paid then return false, why end
+    return { paid = paid }
+end
+
+function H.contestTicket(src, a)
+    local p = police()
+    if not p then return false, 'The police records are offline' end
+    return p:ContestTicket(src, num(a.id), PWC.clean(a.reason, 500))
+end
+
+function H.payImpound(src, a)
+    local p = police()
+    if not p then return false, 'The police records are offline' end
+    return p:PayImpound(src, num(a.id))
+end
+
+function H.readMail(src, a)
+    local p = police()
+    if not p then return true end
+    return p:ReadMail(Whip.core:GetCharId(src), num(a.id))
+end
+
+H.contests = staff('rule', function()
+    local p = police()
+    if not p then return {} end
+    local out = {}
+    for _, t in ipairs(p:GetContests() or {}) do
+        out[#out + 1] = { id = t.id, number = t.number, label = t.label, amount = t.amount, reason = t.reason, plate = t.plate,
+            place = t.place, notes = t.notes, contestReason = t.contestReason, statement = t.statement, contestDue = t.contestDue,
+            charId = t.charId, createdAt = t.createdAt }
+    end
+    local ids = {}
+    for _, t in ipairs(out) do ids[#ids + 1] = t.charId end
+    local names = #ids > 0 and Whip.core:GetCharacterNames(ids) or {}
+    for _, t in ipairs(out) do t.name = names[t.charId] end
+    return out
+end)
+
+H.ruleTicket = staff('rule', function(_, a, me)
+    local p = police()
+    if not p then return false, 'The police records are offline' end
+    local verdict = a.verdict
+    if verdict ~= 'dismiss' and verdict ~= 'reduce' and verdict ~= 'uphold' then return false, 'Dismiss, reduce or uphold' end
+    return p:RuleTicket(num(a.id), verdict, num(a.amount), me, PWC.clean(a.note, 300))
+end)
+
 function H.waypoint(src, a)
     for _, c in ipairs(Config.Courtrooms) do
         if c.label == a.room and c.coords then return Whip.core:SetPlayerWaypoint(src, c.coords) end

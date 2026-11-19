@@ -101,6 +101,22 @@ textarea.ct-in{min-height:4.5rem;resize:none}
 .ct-side{display:grid;gap:.875rem;align-content:start}
 .ct-two{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.5rem;align-items:center}
 .ct-wait{position:sticky;top:0;z-index:2;height:.125rem;margin-bottom:-.875rem;overflow:hidden;opacity:0;transition:opacity .2s}
+.ct-mail{display:grid;gap:.25rem;width:100%;text-align:left;background:var(--sheet);border:1px solid var(--line);border-radius:.625rem;padding:.75rem .875rem;color:inherit;font:inherit;cursor:pointer}
+.ct-mail .top{display:flex;gap:.5rem;align-items:baseline}
+.ct-mail b{flex:1;min-width:0;font:700 1rem/1.2 'PWC Caslon',Georgia,serif;overflow-wrap:anywhere}
+.ct-mail small{color:var(--faint);font-size:.6875rem;white-space:nowrap}
+.ct-mail .from{font-size:.75rem;color:var(--mute)}
+.ct-mail.new b::before{content:'';display:inline-block;width:.4375rem;height:.4375rem;border-radius:50%;background:var(--ox);margin-right:.4375rem;transform:translateY(-.125rem)}
+.ct-mail p{margin:.375rem 0 0;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--ink)}
+.ct-tk{display:grid;gap:.5rem;background:var(--sheet);border:1px solid var(--line);border-radius:.625rem;padding:.75rem .875rem}
+.ct-tk .top{display:flex;gap:.75rem;align-items:center}
+.ct-tk .top .t{flex:1;min-width:0;display:grid;gap:.125rem}
+.ct-tk .top .t b{font:700 1rem/1.2 'PWC Caslon',Georgia,serif;overflow-wrap:anywhere}
+.ct-tk .top .t span{font-size:.75rem;color:var(--mute);overflow-wrap:anywhere}
+.ct-tk .amt{font:700 1.125rem 'PWC Caslon',Georgia,serif;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ct-tk .amt s{color:var(--faint);font-size:.8125rem;margin-right:.375rem}
+.ct-quote{margin:0;padding:.5rem .75rem;border-left:2px solid var(--line2);color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
+.ct-quote+small{color:var(--faint);font-size:.6875rem}
 .ct-wait.on{opacity:1}.ct-wait::after{content:'';position:absolute;inset:0;background:var(--baize);transform-origin:0 0;animation:ct-wait 1s ease-in-out infinite}
 @keyframes ct-wait{0%{transform:translateX(-100%) scaleX(.4)}100%{transform:translateX(250%) scaleX(.4)}}
 `;
@@ -151,9 +167,10 @@ textarea.ct-in{min-height:4.5rem;resize:none}
 
   const tabsFor = (s) => {
     const me = s.me || {};
-    const list = [['mine', 'My cases']];
+    const list = [['mine', me.justice ? 'Mine' : 'My cases']];
     if (me.lawyer) list.push(['clients', 'Clients']);
-    if (me.justice) list.push(['docket', 'Docket'], ['hearings', 'Hearings']);
+    if (me.justice) list.push(['docket', 'Docket'], ['hearings', 'Hearings'], ['contests', 'Contests']);
+    list.push(['papers', 'Papers']);
     return list;
   };
 
@@ -182,6 +199,46 @@ textarea.ct-in{min-height:4.5rem;resize:none}
     else if (s.tab === 'clients') await ask(app, 'clients', {}, (r) => { s.clients = r || []; }, true);
     else if (s.tab === 'docket') await ask(app, 'docket', {}, (r) => { s.docket = r || []; }, true);
     else if (s.tab === 'hearings') await ask(app, 'docket', {}, (r) => { s.docket = r || []; }, true);
+    else if (s.tab === 'papers') await ask(app, 'papers', {}, (r) => { s.papers = r || { tickets: [], impounds: [], mail: [] }; }, true);
+    else if (s.tab === 'contests') await ask(app, 'contests', {}, (r) => { s.contests = r || []; }, true);
+  };
+
+  const ticketState = (t, now) => {
+    if (t.status === 'warning') return ['Warning', 'mute'];
+    if (t.status === 'paid') return ['Paid', 'ok'];
+    if (t.status === 'void') return [t.contest === 'lapsed' ? 'Dropped' : t.contest === 'dismissed' ? 'Dismissed' : 'Void', 'ok'];
+    if (t.contest === 'open') return ['Before the court', 'due'];
+    if (t.warrant) return ['Warrant out', 'ox'];
+    if (t.dueAt && t.dueAt < now) return ['Overdue', 'ox'];
+    return ['Pay ' + until(t.dueAt).replace(/^in /, 'within '), 'due'];
+  };
+
+  const papersView = (s) => {
+    const p = s.papers || { tickets: [], impounds: [], mail: [] };
+    const now = Date.now() / 1000;
+    const tickets = p.tickets.map((t) => {
+      const [label, tone] = ticketState(t, now);
+      const canPay = t.status === 'unpaid' && t.contest !== 'open';
+      const canContest = t.status === 'unpaid' && !t.signed && t.contest === 'none' && t.kind !== 'warning' && t.dueAt > now;
+      return `<div class="ct-tk" data-key="t${t.id}"><div class="top"><span class="t"><span class="ct-no">${esc(t.number)}</span><b>${esc(t.label)}${t.plate ? ' · ' + esc(t.plate) : ''}</b><span>${esc([t.reason, t.place].filter(Boolean).join(' · '))}</span></span>
+        <span class="amt">${t.original && t.original !== t.amount ? `<s>${money(t.original)}</s>` : ''}${t.kind === 'warning' ? '' : money(t.amount)}</span></div>
+        <div class="ct-acts"><span class="ct-pill ${tone}">${esc(label)}</span><span style="flex:1"></span>${canContest ? `<button class="ct-btn" data-act="contestSheet" data-id="${t.id}">Contest</button>` : ''}${canPay ? `<button class="ct-btn go" data-act="payTicket" data-id="${t.id}">Pay ${money(t.amount)}</button>` : ''}</div>
+        ${t.ruling ? `<p class="ct-quote">${esc(t.ruling)}</p>` : ''}</div>`;
+    }).join('');
+    const cars = p.impounds.map((c) => `<div class="ct-tk" data-key="i${c.id}"><div class="top"><span class="t"><span class="ct-no">${esc(c.plate || '')}</span><b>${esc(c.lot)}</b><span>${esc(c.reason)} · since ${esc(when(c.at))}</span></span>
+        <span class="amt">${money(c.paid ? c.paidAmount : c.bill.total)}</span></div>
+        <div class="ct-sub">${c.paid ? 'Paid.' : `Fee ${money(c.bill.fee)} + ${c.bill.days} day${c.bill.days === 1 ? '' : 's'} storage ${money(c.bill.storage)}; at most ${money(c.bill.most)}.`} ${c.held ? (c.heldUntil ? 'Held until ' + esc(when(c.heldUntil)) + '.' : 'Held until the police release it.') : 'Collect it at the lot.'}</div>
+        ${c.paid ? '' : `<div class="ct-acts"><span style="flex:1"></span><button class="ct-btn go" data-act="payImpound" data-id="${c.id}">Pay ${money(c.bill.total)}</button></div>`}</div>`).join('');
+    const mail = p.mail.map((m) => `<button class="ct-mail ${m.readAt ? '' : 'new'}" data-key="m${m.id}" data-act="readMail" data-id="${m.id}"><span class="top"><b>${esc(m.title)}</b><small>${esc(when(m.at))}</small></span><span class="from">${esc(m.sender)}</span>${s.openMail === m.id ? `<p>${esc(m.body)}</p>` : ''}</button>`).join('');
+    return `<section><p class="ct-lbl">Tickets</p>${tickets || '<div class="ct-empty">No tickets.</div>'}</section>
+      ${cars ? `<section><p class="ct-lbl">Impounded cars</p>${cars}</section>` : ''}
+      <section><p class="ct-lbl">Mail</p>${mail || '<div class="ct-empty">No letters.</div>'}</section>`;
+  };
+
+  const contestsView = (s) => {
+    const rows = s.contests || [];
+    if (!rows.length) return '<div class="ct-empty">No contested tickets.</div>';
+    return `<div class="ct-list">${rows.map((t) => `<button class="ct-row" data-key="k${t.id}" data-act="ruleSheet" data-id="${t.id}"><span class="t"><span class="ct-no">${esc(t.number)}</span><b>${esc(t.name || 'Citizen')}</b><span>${esc(t.label + ' · ' + money(t.amount) + ' · ' + t.reason)}</span></span><span class="ct-pill ${t.contestDue - Date.now() / 1000 < 86400 ? 'ox' : 'due'}">Lapses ${esc(until(t.contestDue))}</span></button>`).join('')}</div>`;
   };
 
   const pill = (r) => {
@@ -251,9 +308,27 @@ textarea.ct-in{min-height:4.5rem;resize:none}
   const DAY = 86400;
   const sheet = (app) => {
     const s = app.state; const k = s.sheet; const r = s.open;
-    if (!k || !r) return '';
+    if (!k || (!r && k !== 'contest' && k !== 'ruleTicket' && k !== 'found')) return '';
     let body = '';
-    if (k === 'bail') {
+    if (k === 'contest') {
+      const t = ((s.papers || {}).tickets || []).find((x) => x.id === s.pickId);
+      if (!t) return '';
+      body = `<h2>Contest ${esc(t.number)}</h2><p class="ct-sub">The deadline stops while the court looks at it. If the court has not ruled in time, the ticket is dropped.</p>
+        <textarea id="f-contest" class="ct-in" data-bind="contest" placeholder="What happened, and why the ticket is wrong">${esc(s.f.contest || '')}</textarea>
+        <button class="ct-btn go wide" data-act="contestTicket">File the contest</button>`;
+    } else if (k === 'ruleTicket') {
+      const t = (s.contests || []).find((x) => x.id === s.pickId);
+      if (!t) return '';
+      const v = s.f.verdict;
+      body = `<h2>${esc(t.number)}</h2><p class="ct-sub">${esc([t.name, t.label, money(t.amount), t.plate, t.place].filter(Boolean).join(' · '))}</p>
+        <section><p class="ct-lbl">Charges</p><p style="margin:0">${esc(t.reason)}</p></section>
+        <section><p class="ct-lbl">Citizen</p><p class="ct-quote">${esc(t.contestReason || '')}</p></section>
+        <section><p class="ct-lbl">Officer</p>${t.statement ? `<p class="ct-quote">${esc(t.statement)}</p>` : '<p class="ct-sub" style="margin:0">No statement yet.</p>'}${t.notes ? `<small>Roadside note: ${esc(t.notes)}</small>` : ''}</section>
+        <div class="ct-chips">${[['dismiss', 'Dismiss'], ['reduce', 'Reduce'], ['uphold', 'Uphold']].map(([id, l]) => `<button class="${v === id ? 'on' : ''}" data-act="pick" data-f="verdict" data-v="${id}">${l}</button>`).join('')}</div>
+        ${v === 'reduce' ? `<input id="f-reduce" class="ct-in" data-bind="reduce" inputmode="numeric" value="${esc(s.f.reduce || '')}" placeholder="New amount, below ${money(t.amount)}">` : ''}
+        <input id="f-note" class="ct-in" data-bind="note" value="${esc(s.f.note || '')}" placeholder="Ruling, in a line (the citizen reads it)">
+        <button class="ct-btn go wide" data-act="ruleTicket" ${v ? '' : 'disabled'}>Rule</button>`;
+    } else if (k === 'bail') {
       body = `<h2>Bail for ${esc(r.no)}</h2><input id="f-bail" class="ct-in" data-bind="bail" inputmode="numeric" value="${esc(s.f.bail != null ? s.f.bail : r.bail || '')}" placeholder="Amount in $ (0 releases them on their word)">
         <div class="ct-acts"><button class="ct-btn go" data-act="setBail">Set bail</button><button class="ct-btn ox" data-act="denyBail">Deny bail</button></div>`;
     } else if (k === 'schedule') {
@@ -305,6 +380,8 @@ textarea.ct-in{min-height:4.5rem;resize:none}
     else if (s.tab === 'clients') body = list(s.clients, 'No clients yet. Defendants pick you in their case.');
     else if (s.tab === 'docket') body = docketView(s);
     else if (s.tab === 'hearings') body = hearingsView(s);
+    else if (s.tab === 'papers') body = papersView(s);
+    else if (s.tab === 'contests') body = contestsView(s);
     else body = mineView(s);
     return `<div class="ct-head"><h1>Court</h1><span class="who">${esc(me.name || '')}<br>${esc(role)}</span></div>
       ${tabs.length > 1 ? `<nav class="ct-nav" role="tablist"><span class="glide"></span>${tabs.map(([id, l]) => `<button class="${s.tab === id ? 'on' : ''}" role="tab" aria-selected="${s.tab === id}" data-act="tab" data-t="${id}">${l}</button>`).join('')}</nav>` : '<div></div>'}
@@ -394,6 +471,29 @@ textarea.ct-in{min-height:4.5rem;resize:none}
     async requestLawyer(app, d) { const s = app.state; await ask(app, 'requestLawyer', { id: s.open.id, lawyer: Number(d.id) }, async () => { s.sheet = null; app.toast('Request sent'); await reopen(app); }); },
     async motion(app) { const s = app.state; await ask(app, 'motion', { id: s.open.id, text: s.f.motion || '' }, async () => { s.f.motion = ''; await reopen(app); }); },
     async waypoint(app) { const s = app.state; await ask(app, 'waypoint', { room: s.open.courtroom }, () => app.toast('Waypoint set')); },
+    contestSheet(app, d) { const s = app.state; s.pickId = Number(d.id); s.f.contest = ''; s.sheet = 'contest'; draw(app); },
+    ruleSheet(app, d) { const s = app.state; s.pickId = Number(d.id); s.f.verdict = null; s.f.reduce = ''; s.f.note = ''; s.sheet = 'ruleTicket'; draw(app); },
+    async payTicket(app, d) {
+      const s = app.state; const t = s.papers.tickets.find((x) => x.id === Number(d.id));
+      await ask(app, 'payTicket', { id: Number(d.id) }, async () => { if (t) { t.status = 'paid'; } app.toast('Paid ' + (t ? t.number : '')); await load(app); });
+    },
+    async contestTicket(app) {
+      const s = app.state;
+      await ask(app, 'contestTicket', { id: s.pickId, reason: s.f.contest || '' }, async () => { s.sheet = null; app.toast('Contest filed'); await load(app); });
+    },
+    async payImpound(app, d) { await ask(app, 'payImpound', { id: Number(d.id) }, async () => { app.toast('Impound paid'); await load(app); }); },
+    readMail(app, d) {
+      const s = app.state; const id = Number(d.id);
+      s.openMail = s.openMail === id ? null : id;
+      const m = ((s.papers || {}).mail || []).find((x) => x.id === id);
+      if (m && !m.readAt) { m.readAt = Math.floor(Date.now() / 1000); ask(app, 'readMail', { id }, null, true); }
+      draw(app);
+    },
+    async ruleTicket(app) {
+      const s = app.state;
+      const amount = Number(String(s.f.reduce || '').replace(/[^0-9]/g, ''));
+      await ask(app, 'ruleTicket', { id: s.pickId, verdict: s.f.verdict, amount, note: s.f.note || '' }, async () => { s.sheet = null; app.toast('Ruled'); await load(app); });
+    },
   };
 
   const wire = (app, el) => {
