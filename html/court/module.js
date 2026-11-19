@@ -117,6 +117,8 @@ textarea.ct-in{min-height:4.5rem;resize:none}
 .ct-tk .amt s{color:var(--faint);font-size:.8125rem;margin-right:.375rem}
 .ct-quote{margin:0;padding:.5rem .75rem;border-left:2px solid var(--line2);color:var(--ink);white-space:pre-wrap;overflow-wrap:anywhere}
 .ct-quote+small{color:var(--faint);font-size:.6875rem}
+.ct-cp{border:0;background:none;color:inherit;padding:0;cursor:copy}
+.ct-cp:hover{text-decoration:underline;text-decoration-color:var(--line2)}
 .ct-wait.on{opacity:1}.ct-wait::after{content:'';position:absolute;inset:0;background:var(--baize);transform-origin:0 0;animation:ct-wait 1s ease-in-out infinite}
 @keyframes ct-wait{0%{transform:translateX(-100%) scaleX(.4)}100%{transform:translateX(250%) scaleX(.4)}}
 `;
@@ -220,7 +222,7 @@ textarea.ct-in{min-height:4.5rem;resize:none}
       const [label, tone] = ticketState(t, now);
       const canPay = t.status === 'unpaid' && t.contest !== 'open';
       const canContest = t.status === 'unpaid' && !t.signed && t.contest === 'none' && t.kind !== 'warning' && t.dueAt > now;
-      return `<div class="ct-tk" data-key="t${t.id}"><div class="top"><span class="t"><span class="ct-no">${esc(t.number)}</span><b>${esc(t.label)}${t.plate ? ' · ' + esc(t.plate) : ''}</b><span>${esc([t.reason, t.place].filter(Boolean).join(' · '))}</span></span>
+      return `<div class="ct-tk" data-key="t${t.id}"><div class="top"><span class="t"><button class="ct-no ct-cp" data-act="copy" data-v="${esc(t.number)}" title="Copy" style="justify-self:start">${esc(t.number)}</button><b>${esc(t.label)}${t.plate ? ' · ' + esc(t.plate) : ''}</b><span>${esc([t.reason, t.place].filter(Boolean).join(' · '))}</span></span>
         <span class="amt">${t.original && t.original !== t.amount ? `<s>${money(t.original)}</s>` : ''}${t.kind === 'warning' ? '' : money(t.amount)}</span></div>
         <div class="ct-acts"><span class="ct-pill ${tone}">${esc(label)}</span><span style="flex:1"></span>${canContest ? `<button class="ct-btn" data-act="contestSheet" data-id="${t.id}">Contest</button>` : ''}${canPay ? `<button class="ct-btn go" data-act="payTicket" data-id="${t.id}">Pay ${money(t.amount)}</button>` : ''}</div>
         ${t.ruling ? `<p class="ct-quote">${esc(t.ruling)}</p>` : ''}</div>`;
@@ -296,7 +298,7 @@ textarea.ct-in{min-height:4.5rem;resize:none}
     const side = `${canMotion ? `<section><p class="ct-lbl">File a motion</p><textarea id="f-motion" class="ct-in" data-bind="motion" placeholder="What you ask the court for, and why">${esc(s.f.motion || '')}</textarea><div style="margin-top:.5rem"><button class="ct-btn" data-act="motion">File</button></div></section>` : ''}
       ${dock ? `<section><p class="ct-lbl">Docket</p>${dock}</section>` : ''}`;
     return `<button class="ct-back" data-act="close"><svg viewBox="0 0 24 24" style="width:1rem;height:1rem" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>Back</button>
-      <div class="ct-case"><div class="ct-fold"><span class="tab ct-no">${esc(r.no)}</span><div class="card">${stamp}
+      <div class="ct-case"><div class="ct-fold"><button class="tab ct-no ct-cp" data-act="copy" data-v="${esc(r.no)}" title="Copy">${esc(r.no)}</button><div class="card">${stamp}
         <div><p class="ct-name">${esc(r.name || 'Defendant')}</p><p class="ct-sub">${esc([r.officer ? 'Charged by ' + r.officer : '', r.judge ? 'Judge ' + r.judge : ''].filter(Boolean).join(' · '))}</p></div>
         <section><p class="ct-lbl">Charges · ${total.m} months · ${money(total.f)}</p>${charges}</section>
         ${bailFact}${hearing}${as !== 'public' ? lawyer : ''}${deal}
@@ -422,7 +424,19 @@ textarea.ct-in{min-height:4.5rem;resize:none}
 
   const reopen = async (app) => { const s = app.state; if (s.open) await ask(app, 'case', { id: s.open.id }, (r) => { s.open = r; }); };
 
+  const copyText = (el, text) => {
+    const doc = el.ownerDocument;
+    const ta = doc.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    doc.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = doc.execCommand('copy'); } catch { ok = false; }
+    ta.remove();
+    if (!ok && navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
+  };
+
   const actions = {
+    copy(app, d) { const ctx = live.get(app); if (ctx) copyText(ctx.el, d.v || ''); app.toast('Copied'); },
     tab(app, d) { const s = app.state; s.tab = d.t; s.open = null; s.sheet = null; draw(app); load(app); },
     async open(app, d) { const s = app.state; s.f.motion = ''; await ask(app, 'case', { id: Number(d.id) }, (r) => { s.open = r; }); },
     close(app) { app.state.open = null; app.state.sheet = null; draw(app); load(app); },
