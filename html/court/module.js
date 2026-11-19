@@ -171,7 +171,7 @@ textarea.ct-in{min-height:4.5rem;resize:none}
     const me = s.me || {};
     const list = [['mine', me.justice ? 'Mine' : 'My cases']];
     if (me.lawyer) list.push(['clients', 'Clients']);
-    if (me.justice) list.push(['docket', 'Docket'], ['hearings', 'Hearings'], ['contests', 'Contests']);
+    if (me.justice) list.push(['docket', 'Docket'], ['hearings', 'Hearings'], ['contests', 'Desk']);
     list.push(['papers', 'Papers']);
     return list;
   };
@@ -202,7 +202,7 @@ textarea.ct-in{min-height:4.5rem;resize:none}
     else if (s.tab === 'docket') await ask(app, 'docket', {}, (r) => { s.docket = r || []; }, true);
     else if (s.tab === 'hearings') await ask(app, 'docket', {}, (r) => { s.docket = r || []; }, true);
     else if (s.tab === 'papers') await ask(app, 'papers', {}, (r) => { s.papers = r || { tickets: [], impounds: [], mail: [] }; }, true);
-    else if (s.tab === 'contests') await ask(app, 'contests', {}, (r) => { s.contests = r || []; }, true);
+    else if (s.tab === 'contests') await Promise.all([ask(app, 'contests', {}, (r) => { s.contests = r || []; }, true), ask(app, 'warrants', {}, (r) => { s.warrantReqs = r || []; }, true)]);
   };
 
   const ticketState = (t, now) => {
@@ -239,8 +239,12 @@ textarea.ct-in{min-height:4.5rem;resize:none}
 
   const contestsView = (s) => {
     const rows = s.contests || [];
-    if (!rows.length) return '<div class="ct-empty">No contested tickets.</div>';
-    return `<div class="ct-list">${rows.map((t) => `<button class="ct-row" data-key="k${t.id}" data-act="ruleSheet" data-id="${t.id}"><span class="t"><span class="ct-no">${esc(t.number)}</span><b>${esc(t.name || 'Citizen')}</b><span>${esc(t.label + ' · ' + money(t.amount) + ' · ' + t.reason)}</span></span><span class="ct-pill ${t.contestDue - Date.now() / 1000 < 86400 ? 'ox' : 'due'}">Lapses ${esc(until(t.contestDue))}</span></button>`).join('')}</div>`;
+    const ws = s.warrantReqs || [];
+    const warrants = ws.length ? `<div class="ct-list">${ws.map((w) => `<div class="ct-tk" data-key="w${w.id}"><div class="top"><span class="t"><span class="ct-no">Warrant request #${w.id}</span><b>${esc(w.name || 'Citizen')}</b><span>${esc([w.officer ? 'Asked by ' + w.officer : '', w.days ? w.days + ' days' : '', 'lapses ' + until(w.lapsesAt)].filter(Boolean).join(' · '))}</span></span></div>
+      <p class="ct-quote">${esc(w.reason)}</p>
+      <div class="ct-acts"><span style="flex:1"></span><button class="ct-btn ox" data-act="signWarrant" data-id="${w.id}" data-v="0">Deny</button><button class="ct-btn go" data-act="signWarrant" data-id="${w.id}" data-v="1">Sign</button></div></div>`).join('')}</div>` : '<div class="ct-empty">No warrants waiting.</div>';
+    const tickets = rows.length ? `<div class="ct-list">${rows.map((t) => `<button class="ct-row" data-key="k${t.id}" data-act="ruleSheet" data-id="${t.id}"><span class="t"><span class="ct-no">${esc(t.number)}</span><b>${esc(t.name || 'Citizen')}</b><span>${esc(t.label + ' · ' + money(t.amount) + ' · ' + t.reason)}</span></span><span class="ct-pill ${t.contestDue - Date.now() / 1000 < 86400 ? 'ox' : 'due'}">Lapses ${esc(until(t.contestDue))}</span></button>`).join('')}</div>` : '<div class="ct-empty">No contested tickets.</div>';
+    return `<section><p class="ct-lbl">Warrants to sign</p>${warrants}</section><section><p class="ct-lbl">Contested tickets</p>${tickets}</section>`;
   };
 
   const pill = (r) => {
@@ -485,6 +489,13 @@ textarea.ct-in{min-height:4.5rem;resize:none}
     async requestLawyer(app, d) { const s = app.state; await ask(app, 'requestLawyer', { id: s.open.id, lawyer: Number(d.id) }, async () => { s.sheet = null; app.toast('Request sent'); await reopen(app); }); },
     async motion(app) { const s = app.state; await ask(app, 'motion', { id: s.open.id, text: s.f.motion || '' }, async () => { s.f.motion = ''; await reopen(app); }); },
     async waypoint(app) { const s = app.state; await ask(app, 'waypoint', { room: s.open.courtroom }, () => app.toast('Waypoint set')); },
+    async signWarrant(app, d) {
+      const s = app.state; const id = Number(d.id); const approve = d.v === '1';
+      s.warrantReqs = (s.warrantReqs || []).filter((w) => w.id !== id);
+      draw(app);
+      await ask(app, 'signWarrant', { id, approve }, () => app.toast(approve ? 'Warrant signed' : 'Warrant denied'));
+      await load(app);
+    },
     contestSheet(app, d) { const s = app.state; s.pickId = Number(d.id); s.f.contest = ''; s.sheet = 'contest'; draw(app); },
     ruleSheet(app, d) { const s = app.state; s.pickId = Number(d.id); s.f.verdict = null; s.f.reduce = ''; s.f.note = ''; s.sheet = 'ruleTicket'; draw(app); },
     async payTicket(app, d) {

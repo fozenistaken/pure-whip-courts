@@ -176,6 +176,22 @@ H.contests = staff('rule', function()
     return out
 end)
 
+H.warrants = staff('rule', function()
+    local p = police()
+    if not p then return {} end
+    local out = {}
+    for _, w in ipairs(p:GetWarrantRequests() or {}) do
+        out[#out + 1] = { id = w.id, name = w.name, officer = w.officer, reason = w.reason, days = w.days, lapsesAt = w.lapsesAt, askedAt = w.askedAt, reportId = w.reportId }
+    end
+    return out
+end)
+
+H.signWarrant = staff('rule', function(_, a, me)
+    local p = police()
+    if not p then return false, 'The police records are offline' end
+    return p:SignWarrant(num(a.id), a.approve == true, me, PWC.clean(a.note, 200))
+end)
+
 H.ruleTicket = staff('rule', function(_, a, me)
     local p = police()
     if not p then return false, 'The police records are offline' end
