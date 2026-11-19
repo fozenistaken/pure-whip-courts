@@ -116,7 +116,7 @@ local function police() return GetResourceState(Config.Police) == 'started' and 
 
 function H.papers(src)
     local p = police()
-    if not p then return { tickets = {}, impounds = {}, mail = {} } end
+    if not p then return { tickets = {}, impounds = {}, mail = {}, permitApps = {}, permitKinds = {} } end
     local me = Whip.core:GetCharId(src)
     local tickets = {}
     for _, t in ipairs(p:GetFines(me) or {}) do
@@ -131,7 +131,23 @@ function H.papers(src)
         impounds[#impounds + 1] = { id = r.id, plate = r.plate, model = r.model, lot = r.lotLabel, reason = r.reason, at = r.at,
             bill = r.bill, paid = r.paid, paidAmount = r.paidAmount, held = r.held, heldUntil = r.heldUntil }
     end
-    return { tickets = tickets, impounds = impounds, mail = p:GetMail(me) or {} }
+    local apps = {}
+    for _, a in ipairs(p:GetMyPermitApps(me) or {}) do
+        apps[#apps + 1] = { id = a.id, label = a.label, status = a.status, note = a.note, at = a.at }
+    end
+    return { tickets = tickets, impounds = impounds, mail = p:GetMail(me) or {}, permitApps = apps, permitKinds = p:GetPermitKinds() or {} }
+end
+
+function H.applyPermit(src, a)
+    local p = police()
+    if not p then return false, 'The police records are offline' end
+    return p:ApplyForPermit(src, PWC.clean(a.kind, 24), PWC.clean(a.reason, 500))
+end
+
+function H.complain(src, a)
+    local p = police()
+    if not p then return false, 'The police records are offline' end
+    return p:FileComplaint(src, PWC.clean(a.officer, 60), PWC.clean(a.text, 1500))
 end
 
 function H.payTicket(src, a)

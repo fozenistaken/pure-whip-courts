@@ -216,7 +216,7 @@ textarea.ct-in{min-height:4.5rem;resize:none}
   };
 
   const papersView = (s) => {
-    const p = s.papers || { tickets: [], impounds: [], mail: [] };
+    const p = s.papers || { tickets: [], impounds: [], mail: [], permitApps: [], permitKinds: [] };
     const now = Date.now() / 1000;
     const tickets = p.tickets.map((t) => {
       const [label, tone] = ticketState(t, now);
@@ -232,8 +232,13 @@ textarea.ct-in{min-height:4.5rem;resize:none}
         <div class="ct-sub">${c.paid ? 'Paid.' : `Fee ${money(c.bill.fee)} + ${c.bill.days} day${c.bill.days === 1 ? '' : 's'} storage ${money(c.bill.storage)}; at most ${money(c.bill.most)}.`} ${c.held ? (c.heldUntil ? 'Held until ' + esc(when(c.heldUntil)) + '.' : 'Held until the police release it.') : 'Collect it at the lot.'}</div>
         ${c.paid ? '' : `<div class="ct-acts"><span style="flex:1"></span><button class="ct-btn go" data-act="payImpound" data-id="${c.id}">Pay ${money(c.bill.total)}</button></div>`}</div>`).join('');
     const mail = p.mail.map((m) => `<button class="ct-mail ${m.readAt ? '' : 'new'}" data-key="m${m.id}" data-act="readMail" data-id="${m.id}"><span class="top"><b>${esc(m.title)}</b><small>${esc(when(m.at))}</small></span><span class="from">${esc(m.sender)}</span>${s.openMail === m.id ? `<p>${esc(m.body)}</p>` : ''}</button>`).join('');
+    const APP = { open: ['Waiting', 'due'], approved: ['Approved', 'ok'], denied: ['Denied', 'ox'] };
+    const apps = (p.permitApps || []).map((a) => `<div class="ct-tk" data-key="a${a.id}"><div class="top"><span class="t"><b>${esc(a.label)}</b><span>Applied ${esc(when(a.at))}</span></span><span class="ct-pill ${(APP[a.status] || ['', 'mute'])[1]}">${(APP[a.status] || [a.status])[0]}</span></div>${a.note ? `<p class="ct-quote">${esc(a.note)}</p>` : ''}</div>`).join('');
+    const kinds = p.permitKinds || [];
     return `<section><p class="ct-lbl">Tickets</p>${tickets || '<div class="ct-empty">No tickets.</div>'}</section>
       ${cars ? `<section><p class="ct-lbl">Impounded cars</p>${cars}</section>` : ''}
+      ${kinds.length || apps ? `<section><p class="ct-lbl">Permits</p>${apps}${kinds.length ? '<div class="ct-acts"><button class="ct-btn" data-act="permitSheet">Apply for a permit</button></div>' : ''}</section>` : ''}
+      <section><p class="ct-lbl">Police conduct</p><div class="ct-acts"><button class="ct-btn" data-act="complainSheet">File a complaint</button></div></section>
       <section><p class="ct-lbl">Mail</p>${mail || '<div class="ct-empty">No letters.</div>'}</section>`;
   };
 
@@ -314,7 +319,7 @@ textarea.ct-in{min-height:4.5rem;resize:none}
   const DAY = 86400;
   const sheet = (app) => {
     const s = app.state; const k = s.sheet; const r = s.open;
-    if (!k || (!r && k !== 'contest' && k !== 'ruleTicket' && k !== 'found')) return '';
+    if (!k || (!r && k !== 'contest' && k !== 'ruleTicket' && k !== 'found' && k !== 'permit' && k !== 'complain')) return '';
     let body = '';
     if (k === 'contest') {
       const t = ((s.papers || {}).tickets || []).find((x) => x.id === s.pickId);
@@ -322,6 +327,17 @@ textarea.ct-in{min-height:4.5rem;resize:none}
       body = `<h2>Contest ${esc(t.number)}</h2><p class="ct-sub">The deadline stops while the court looks at it. If the court has not ruled in time, the ticket is dropped.</p>
         <textarea id="f-contest" class="ct-in" data-bind="contest" placeholder="What happened, and why the ticket is wrong">${esc(s.f.contest || '')}</textarea>
         <button class="ct-btn go wide" data-act="contestTicket">File the contest</button>`;
+    } else if (k === 'permit') {
+      const kinds = (s.papers || {}).permitKinds || [];
+      body = `<h2>Apply for a permit</h2><p class="ct-sub">The police review it and write back.</p>
+        <div class="ct-acts" style="justify-content:flex-start">${kinds.map((x) => `<button class="ct-btn ${s.f.permitKind === x.kind ? 'go' : ''}" data-act="pickPermit" data-v="${esc(x.kind)}" aria-pressed="${s.f.permitKind === x.kind}">${esc(x.label)}</button>`).join('')}</div>
+        <textarea id="f-permitReason" class="ct-in" data-bind="permitReason" placeholder="Why you need it">${esc(s.f.permitReason || '')}</textarea>
+        <button class="ct-btn go wide" data-act="applyPermit" ${s.f.permitKind ? '' : 'disabled'}>Send the application</button>`;
+    } else if (k === 'complain') {
+      body = `<h2>File a complaint</h2><p class="ct-sub">Internal Affairs reads it and writes back with a finding.</p>
+        <input id="f-iaOfficer" class="ct-in" data-bind="iaOfficer" value="${esc(s.f.iaOfficer || '')}" placeholder="Officer name, call sign or badge">
+        <textarea id="f-iaText" class="ct-in" data-bind="iaText" placeholder="What happened, when and where">${esc(s.f.iaText || '')}</textarea>
+        <button class="ct-btn go wide" data-act="complain">File it</button>`;
     } else if (k === 'ruleTicket') {
       const t = (s.contests || []).find((x) => x.id === s.pickId);
       if (!t) return '';
@@ -495,6 +511,17 @@ textarea.ct-in{min-height:4.5rem;resize:none}
       draw(app);
       await ask(app, 'signWarrant', { id, approve }, () => app.toast(approve ? 'Warrant signed' : 'Warrant denied'));
       await load(app);
+    },
+    permitSheet(app) { const s = app.state; s.f.permitKind = null; s.f.permitReason = ''; s.sheet = 'permit'; draw(app); },
+    pickPermit(app, d) { app.state.f.permitKind = d.v; draw(app); },
+    async applyPermit(app) {
+      const s = app.state;
+      await ask(app, 'applyPermit', { kind: s.f.permitKind, reason: s.f.permitReason || '' }, async () => { s.sheet = null; app.toast('Application sent'); await load(app); });
+    },
+    complainSheet(app) { const s = app.state; s.f.iaOfficer = ''; s.f.iaText = ''; s.sheet = 'complain'; draw(app); },
+    async complain(app) {
+      const s = app.state;
+      await ask(app, 'complain', { officer: s.f.iaOfficer || '', text: s.f.iaText || '' }, async () => { s.sheet = null; app.toast('Complaint filed'); });
     },
     contestSheet(app, d) { const s = app.state; s.pickId = Number(d.id); s.f.contest = ''; s.sheet = 'contest'; draw(app); },
     ruleSheet(app, d) { const s = app.state; s.pickId = Number(d.id); s.f.verdict = null; s.f.reduce = ''; s.f.note = ''; s.sheet = 'ruleTicket'; draw(app); },
