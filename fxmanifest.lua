@@ -9,6 +9,7 @@ version '1.0.0'
 
 dependency 'whip_core'
 whip_requires '1.0'
+whip_updates 'fozenistaken/pure-whip-courts'
 
 shared_scripts {
     '@whip_core/lib/satellite.lua',
