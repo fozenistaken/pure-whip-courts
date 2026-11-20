@@ -1,5 +1,7 @@
 # pure-whip-courts
 
+> Works on **FiveM Legacy** and **GTA V Enhanced**.
+
 **Courts, bail and a court app for [WHIP](https://whipfx.net), by [PureFX](https://purefx.dev).**
 
 A suspect booked by an officer pleads guilty (sentenced at once, with a discount) or not guilty (a court case with bail
