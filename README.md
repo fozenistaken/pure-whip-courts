@@ -1,8 +1,22 @@
 # pure-whip-courts
 
-Courts and bail for WHIP. A suspect booked by an officer pleads guilty (sentenced at once, with a discount) or not
-guilty (a court case with bail or remand, a hearing, plea deals, attorneys, a judge's ruling). Built on whip_core,
-whip_phone and the exports of [pure-whip-police](../pure-whip-police).
+**Courts, bail and a court app for [WHIP](https://whipfx.net), by [PureFX](https://purefx.dev).**
+
+A suspect booked by an officer pleads guilty (sentenced at once, with a discount) or not guilty (a court case with bail
+or remand, a hearing, plea deals, attorneys, a judge's ruling). Citizens handle their tickets, impounded cars, permits
+and complaints from the same app. Built on whip_core, whip_phone and the exports of
+[pure-whip-police](https://github.com/fozenistaken/pure-whip-police).
+
+More from PureFX at **[purefx.dev](https://purefx.dev)**.
+
+## Features
+
+| | | |
+|---|---|---|
+| <img src="docs/img/court-case.webp" width="240" alt="A court case"> | <img src="docs/img/court-papers.webp" width="240" alt="Papers tab"> | <img src="docs/img/court-permit.webp" width="240" alt="Permit application"> |
+| **A case:** charges, bail, the hearing, your attorney, a plea deal on the table, motions and the docket | **Papers:** tickets to pay or contest, impounded cars with the bill, letters from the city | **Permits and complaints:** apply for a permit, file a complaint about an officer |
+| <img src="docs/img/court-desk.webp" width="240" alt="Judge's desk"> | <img src="docs/img/court-ruling.webp" width="240" alt="Ruling on a contest"> | |
+| **Judge's desk:** warrant requests to sign or deny, contested tickets | **Ruling:** dismiss, reduce or uphold, with the citizen's reason and the officer's statement beside it | |
 
 ## Install
 
@@ -41,11 +55,17 @@ Results, or `false, why`.
 
 `pure-whip-courts:` followed by `caseOpened`, `bailPosted`, `hearingSet`, `ruled`, `caseClosed`.
 
-## Assets
-
-Fonts in `html/court/fonts/` are Libre Caslon Text, Public Sans and DM Mono from Google Fonts (SIL Open Font
-License).
-
 ## Tests
 
 `lua tests/run.lua .` runs the court logic tests (bail, plea discount, settling bail against a fine, reminders).
+
+## Credits
+
+- **Made by [PureFX](https://purefx.dev).** More scripts and updates at **[purefx.dev](https://purefx.dev)**.
+- **[WHIP](https://whipfx.net)** by [WHIPFX](https://github.com/WHIPFX) (LGPL-3.0): the framework this is built on.
+- **Fonts:** Libre Caslon Text, Public Sans and DM Mono, SIL Open Font License 1.1 (texts in `html/court/fonts/`).
+- The screenshots above are the real UI rendered in a browser with sample data.
+
+## Licence
+
+GPL-3.0, see [LICENSE](LICENSE). Copyright 2026 [PureFX](https://purefx.dev).

@@ -3,6 +3,7 @@ game 'gta5'
 lua54 'yes'
 
 name 'pure-whip-courts'
+author 'PureFX (purefx.dev)'
 description 'Courts and bail for WHIP: pleas at booking, cases, bail, hearings, plea deals, lawyers and the court app'
 version '1.0.0'
 
